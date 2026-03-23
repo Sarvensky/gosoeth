@@ -3,7 +3,7 @@
 # Скрипт сборки проекта gosoeth для Linux
 echo "--- Запуск сборки и упаковки gosoeth (Linux Bash) ---"
 
-VERSION="1.0.0"
+VERSION="1.1.0"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 DIST_DIR="$SCRIPT_DIR/dist"

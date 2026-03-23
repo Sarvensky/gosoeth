@@ -3,7 +3,7 @@
 
 Write-Host "--- Запуск сборки и упаковки gosoeth (Windows PS) ---" -ForegroundColor Cyan
 
-$version = "1.0.0"
+$version = "1.1.0"
 $scriptDir = $PSScriptRoot
 $rootDir = (Resolve-Path "$scriptDir/..").Path
 $distDir = "$scriptDir/dist"
@@ -21,7 +21,7 @@ $null = New-Item -ItemType Directory -Path $distDir -Force
 
 # 2. Сборка под Windows (amd64)
 Write-Host "Сборка: Windows (amd64)..."
-$env:GOOS="windows"; $env:GOARCH="amd64"; $env:CGO_ENABLED="0"
+$env:GOOS = "windows"; $env:GOARCH = "amd64"; $env:CGO_ENABLED = "0"
 Push-Location $rootDir
 go build -ldflags "-s -w" -o "$winDir/gosoeth.exe" .
 Pop-Location
@@ -33,7 +33,7 @@ Compress-Archive -Path "$winDir/*" -DestinationPath "$distDir/gosoeth-v$version-
 
 # 3. Сборка под Linux (amd64, статическая)
 Write-Host "Сборка: Linux (amd64)..."
-$env:GOOS="linux"; $env:GOARCH="amd64"; $env:CGO_ENABLED="0"
+$env:GOOS = "linux"; $env:GOARCH = "amd64"; $env:CGO_ENABLED = "0"
 Push-Location $rootDir
 go build -ldflags "-s -w" -o "$linDir/gosoeth" .
 Pop-Location
@@ -46,6 +46,6 @@ tar -czf "$distDir/gosoeth-v$version-linux-amd64.tar.gz" gosoeth config.ini
 Pop-Location
 
 # Сброс переменных
-$env:GOOS=""; $env:GOARCH=""; $env:CGO_ENABLED=""
+$env:GOOS = ""; $env:GOARCH = ""; $env:CGO_ENABLED = ""
 
 Write-Host "`n--- Все архивы готовы в папке $distDir ---" -ForegroundColor Cyan
