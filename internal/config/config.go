@@ -2,11 +2,13 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"strconv"
 
 	"gopkg.in/ini.v1"
 )
 
+// Proxy содержит параметры конфигурации одного SOCKS5 прокси-сервера.
 type Proxy struct {
 	Name       string
 	ListenPort int
@@ -16,6 +18,7 @@ type Proxy struct {
 	DNSCrypto  string
 }
 
+// Global содержит глобальные настройки приложения (логирование и т.д.).
 type Global struct {
 	LogDir        string
 	LogMaxBackups int
@@ -43,8 +46,9 @@ func Load(path string) (Global, []Proxy, error) {
 		}
 
 		portStr := section.Key("listen_port").String()
-		port, _ := strconv.Atoi(portStr)
-		if port == 0 {
+		port, err := strconv.Atoi(portStr)
+		if err != nil || port <= 0 || port > 65535 {
+			log.Printf("ERROR: [%s] Невалидный порт '%s', секция пропущена", name, portStr)
 			continue
 		}
 

@@ -17,16 +17,20 @@ import (
 	"golang.org/x/net/http2"
 )
 
+// bootstrapEntry хранит закэшированный IP DNS-сервера и время истечения кэша.
 type bootstrapEntry struct {
 	ip        string
 	expiresAt time.Time
 }
 
+// interfaceCache хранит закэшированный IP сетевого адаптера и время истечения кэша.
 type interfaceCache struct {
 	ip        string
 	expiresAt time.Time
 }
 
+// CustomResolver реализует интерфейс socks5.NameResolver.
+// Резолвит доменные имена через DoH, DoT или UDP DNS, привязываясь к конкретному сетевому адаптеру.
 type CustomResolver struct {
 	InterfaceName string
 	IPv6Disable   bool
@@ -39,8 +43,9 @@ type CustomResolver struct {
 	httpClient     *http.Client
 }
 
-// getCachedInterfaceIP возвращает IP адаптера с кэшированием на 10 секунд
-func (r *CustomResolver) getCachedInterfaceIP() (string, error) {
+// GetCachedInterfaceIP возвращает IP адаптера с кэшированием на 10 секунд.
+// Использует double-check locking для потокобезопасности.
+func (r *CustomResolver) GetCachedInterfaceIP() (string, error) {
 	r.mu.RLock()
 	if time.Now().Before(r.ifaceCache.expiresAt) && r.ifaceCache.ip != "" {
 		ip := r.ifaceCache.ip
@@ -69,12 +74,14 @@ func (r *CustomResolver) getCachedInterfaceIP() (string, error) {
 	return ip, nil
 }
 
+// Resolve резолвит доменное имя в IP-адрес.
+// Порядок попыток: DoH/DoT -> UDP DNS -> системный резолвер.
 func (r *CustomResolver) Resolve(ctx context.Context, name string) (context.Context, net.IP, error) {
 	if ip := net.ParseIP(name); ip != nil {
 		return ctx, ip, nil
 	}
 
-	outIP, err := r.getCachedInterfaceIP()
+	outIP, err := r.GetCachedInterfaceIP()
 	if err != nil {
 		return ctx, nil, err
 	}
@@ -107,6 +114,8 @@ func (r *CustomResolver) Resolve(ctx context.Context, name string) (context.Cont
 	return ctx, resolvedIP, err
 }
 
+// getBootstrapIP резолвит IP адрес DNS-сервера через публичные UDP DNS (1.1.1.1, 8.8.8.8, 77.88.8.8).
+// Результат кэшируется на 1 час для предотвращения рекурсии DoH/DoT -> DNS -> DoH/DoT.
 func (r *CustomResolver) getBootstrapIP(host string, localIP string) (string, error) {
 	r.mu.RLock()
 	entry, ok := r.bootstrapIPs[host]
@@ -138,10 +147,15 @@ func (r *CustomResolver) getBootstrapIP(host string, localIP string) (string, er
 	return "", fmt.Errorf("bootstrap fail")
 }
 
+// resolveDoH выполняет DNS-запрос через DNS-over-HTTPS (RFC 8484).
+// HTTP-клиент создаётся один раз и переиспользуется для всех последующих запросов.
 func (r *CustomResolver) resolveDoH(name string, localIP string) (net.IP, error) {
 	msg := new(dns.Msg)
 	msg.SetQuestion(dns.Fqdn(name), dns.TypeA)
-	pack, _ := msg.Pack()
+	pack, err := msg.Pack()
+	if err != nil {
+		return nil, fmt.Errorf("ошибка упаковки DNS-запроса: %v", err)
+	}
 	dnsParam := base64.RawURLEncoding.EncodeToString(pack)
 	
 	u := strings.TrimPrefix(r.DNSCrypto, "https://")
@@ -184,7 +198,10 @@ func (r *CustomResolver) resolveDoH(name string, localIP string) (net.IP, error)
 		finalURL += "?dns=" + dnsParam
 	}
 
-	req, _ := http.NewRequest("GET", finalURL, nil)
+	req, err := http.NewRequest("GET", finalURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка создания HTTP-запроса: %v", err)
+	}
 	req.Header.Set("Accept", "application/dns-message")
 	req.Header.Set("User-Agent", "gosoeth/1.0")
 
@@ -198,7 +215,10 @@ func (r *CustomResolver) resolveDoH(name string, localIP string) (net.IP, error)
 		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка чтения ответа DoH: %v", err)
+	}
 	msgResp := new(dns.Msg)
 	if err := msgResp.Unpack(body); err != nil {
 		return nil, err
@@ -212,6 +232,9 @@ func (r *CustomResolver) resolveDoH(name string, localIP string) (net.IP, error)
 	return nil, fmt.Errorf("IP не найден")
 }
 
+// resolveDoT выполняет DNS-запрос через DNS-over-TLS (RFC 7858).
+// ВАЖНО: в отличие от DoH, каждый вызов создаёт новое TLS-соединение,
+// что создаёт бо́льшую нагрузку. При высоком трафике рекомендуется использовать DoH.
 func (r *CustomResolver) resolveDoT(name, localIP string) (net.IP, error) {
 	server := strings.TrimPrefix(r.DNSCrypto, "tls://")
 	port := "853"
@@ -246,6 +269,7 @@ func (r *CustomResolver) resolveDoT(name, localIP string) (net.IP, error) {
 	return nil, fmt.Errorf("IP не найден")
 }
 
+// resolveUDP выполняет обычный DNS-запрос через UDP (порт 53).
 func (r *CustomResolver) resolveUDP(name, server, localIP string) (net.IP, error) {
 	c := new(dns.Client)
 	c.Dialer = &net.Dialer{LocalAddr: &net.UDPAddr{IP: net.ParseIP(localIP)}, Timeout: 2 * time.Second}
@@ -263,6 +287,8 @@ func (r *CustomResolver) resolveUDP(name, server, localIP string) (net.IP, error
 	return nil, fmt.Errorf("не найден")
 }
 
+// resolveSystem использует системный DNS-резолвер как последний вариант.
+// Привязывается к локальному IP адаптера для маршрутизации через нужный интерфейс.
 func (r *CustomResolver) resolveSystem(ctx context.Context, name, localIP string) (net.IP, error) {
 	resolver := &net.Resolver{
 		PreferGo: true,

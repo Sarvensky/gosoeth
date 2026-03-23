@@ -10,10 +10,11 @@ import (
 	"github.com/armon/go-socks5"
 	"github.com/Sarvensky/gosoeth/internal/config"
 	"github.com/Sarvensky/gosoeth/internal/logger"
-	"github.com/Sarvensky/gosoeth/internal/network"
+	"github.com/Sarvensky/gosoeth/internal/network" // Используется для создания CustomResolver
 )
 
-// Run запускает инстанс SOCKS5 сервера
+// Run запускает инстанс SOCKS5 сервера для указанной конфигурации прокси.
+// Сервер работает до отмены контекста или критической ошибки.
 func Run(ctx context.Context, p config.Proxy, output io.Writer) {
 	logger.Info("[%s] СТАРТ: Порт %d -> Адаптер %s (IPv6:%t)", p.Name, p.ListenPort, p.Interface, p.IPv6Enable)
 
@@ -26,18 +27,22 @@ func Run(ctx context.Context, p config.Proxy, output io.Writer) {
 
 	conf := &socks5.Config{
 		Resolver: customResolver,
+		// Dial привязывает исходящие TCP-соединения к IP адаптера.
+		// Использует кэшированный IP из CustomResolver, чтобы не делать
+		// системный вызов на каждое подключение.
 		Dial: func(ctx context.Context, netw, addr string) (net.Conn, error) {
 			host, _, err := net.SplitHostPort(addr)
 			if err != nil {
 				return nil, err
 			}
 
+			// Блокировка IPv6 если отключен в конфиге
 			ip := net.ParseIP(host)
 			if !p.IPv6Enable && ip != nil && ip.To4() == nil {
 				return nil, fmt.Errorf("IPv6 заблокирован")
 			}
 
-			outIP, err := network.GetIPFromInterface(p.Interface)
+			outIP, err := customResolver.GetCachedInterfaceIP()
 			if err != nil {
 				return nil, err
 			}
