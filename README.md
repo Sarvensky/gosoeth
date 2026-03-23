@@ -22,18 +22,16 @@
 
 **Windows:**
 ```powershell
-cd builds
-.\build.ps1
+.\builds\build.ps1
 ```
 
 **Linux:**
 ```bash
-cd builds
-chmod +x build.sh
-./build.sh
+chmod +x builds/build.sh
+./builds/build.sh
 ```
 
 ## Требования
 
-- Go 1.20+
+- Go 1.26+
 - Библиотеки: `armon/go-socks5`, `miekg/dns`, `ini.v1`, `http2`.
