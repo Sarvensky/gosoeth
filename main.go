@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"io"
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -14,6 +16,12 @@ import (
 	"github.com/Sarvensky/gosoeth/internal/proxy"
 	"github.com/Sarvensky/gosoeth/internal/service"
 )
+
+//go:embed version.txt
+var appVersionRaw string
+
+// AppVersion содержит версию приложения
+var AppVersion = strings.TrimSpace(appVersionRaw)
 
 func main() {
 	// 1. Загрузка конфигурации
@@ -27,6 +35,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("Ошибка настройки логов: %v", err)
 	}
+
+	logger.Info("=== Запуск gosoeth v%s ===", AppVersion)
 
 	if len(cfgProxies) == 0 {
 		logger.Error("В конфиге не описано ни одной секции прокси")

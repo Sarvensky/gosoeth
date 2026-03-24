@@ -3,9 +3,10 @@
 
 Write-Host "--- Запуск сборки и упаковки gosoeth (Windows PS) ---" -ForegroundColor Cyan
 
-$version = "1.1.0"
 $scriptDir = $PSScriptRoot
 $rootDir = (Resolve-Path "$scriptDir/..").Path
+$versionText = Get-Content -Path "$rootDir/version.txt" -Raw
+$version = $versionText.Trim()
 $distDir = "$scriptDir/dist"
 $winDir = "$scriptDir/windows"
 $linDir = "$scriptDir/linux"

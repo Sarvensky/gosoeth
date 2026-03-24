@@ -3,9 +3,9 @@
 # Скрипт сборки проекта gosoeth для Linux
 echo "--- Запуск сборки и упаковки gosoeth (Linux Bash) ---"
 
-VERSION="1.1.0"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+VERSION=$(cat "$ROOT_DIR/version.txt" | xargs)
 DIST_DIR="$SCRIPT_DIR/dist"
 
 # 1. Очистка и создание папок
