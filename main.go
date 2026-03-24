@@ -13,6 +13,7 @@ import (
 
 	"github.com/Sarvensky/gosoeth/internal/config"
 	"github.com/Sarvensky/gosoeth/internal/logger"
+	"github.com/Sarvensky/gosoeth/internal/network"
 	"github.com/Sarvensky/gosoeth/internal/proxy"
 	"github.com/Sarvensky/gosoeth/internal/service"
 )
@@ -43,17 +44,33 @@ func main() {
 		os.Exit(1)
 	}
 
+	var validProxies []config.Proxy
+	for _, p := range cfgProxies {
+		if !cfgGlobal.SkipInterfaceCheck {
+			if err := network.CheckInterfaceExists(p.Interface); err != nil {
+				logger.Error("[%s] Ошибка: %v. Прокси пропущен. (отключите проверку через skip_interface_check = true)", p.Name, err)
+				continue
+			}
+		}
+		validProxies = append(validProxies, p)
+	}
+
+	if len(validProxies) == 0 {
+		logger.Error("Нет валидных прокси для запуска (интерфейсы не найдены или конфиг пуст)")
+		os.Exit(1)
+	}
+
 	// 3. Выбор режима запуска: служба Windows или интерактивный
 	if service.IsService() {
 		logger.Info("Запуск в режиме службы Windows...")
 		err := service.Run("gosoeth", func(ctx context.Context) {
-			startProxies(ctx, cfgProxies, output)
+			startProxies(ctx, validProxies, output)
 		})
 		if err != nil {
 			logger.Error("Ошибка работы службы: %v", err)
 		}
 	} else {
-		runInteractive(cfgProxies, output)
+		runInteractive(validProxies, output)
 	}
 }
 

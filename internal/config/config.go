@@ -20,9 +20,10 @@ type Proxy struct {
 
 // Global содержит глобальные настройки приложения (логирование и т.д.).
 type Global struct {
-	LogDir        string
-	LogMaxBackups int
-	VerboseLog    bool
+	LogDir             string
+	LogMaxBackups      int
+	VerboseLog         bool
+	SkipInterfaceCheck bool
 }
 
 // Load читает и парсит конфиг
@@ -33,9 +34,10 @@ func Load(path string) (Global, []Proxy, error) {
 	}
 
 	global := Global{
-		LogDir:        cfg.Section("SocksToEth").Key("log_dir").MustString("Logs"),
-		LogMaxBackups: cfg.Section("SocksToEth").Key("log_max_backups").MustInt(30),
-		VerboseLog:    cfg.Section("SocksToEth").Key("verbose_log").MustBool(false),
+		LogDir:             cfg.Section("SocksToEth").Key("log_dir").MustString("Logs"),
+		LogMaxBackups:      cfg.Section("SocksToEth").Key("log_max_backups").MustInt(30),
+		VerboseLog:         cfg.Section("SocksToEth").Key("verbose_log").MustBool(false),
+		SkipInterfaceCheck: cfg.Section("SocksToEth").Key("skip_interface_check").MustBool(false),
 	}
 
 	var proxies []Proxy
